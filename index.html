@@ -54,6 +54,39 @@
             font-weight: 600;
             margin-top: 5px;
         }
+        
+        /* Heatmap styles */
+        .heatmap-cell {
+            stroke: #fff;
+            stroke-width: 1px;
+        }
+        
+        .heatmap-cell:hover {
+            stroke: #555;
+            stroke-width: 2px;
+        }
+        
+        .season-separator {
+            stroke: #555;
+            stroke-width: 2px;
+            stroke-dasharray: 3,3;
+        }
+        
+        .month-label {
+            font-size: 12px;
+            fill: #666;
+        }
+        
+        .day-label {
+            font-size: 10px;
+            fill: #666;
+        }
+        
+        .season-label {
+            font-size: 14px;
+            font-weight: bold;
+            fill: #333;
+        }
     </style>
 </head>
 <body class="bg-gray-100 p-6">
@@ -116,6 +149,12 @@
                 <h2 class="text-xl font-semibold mb-4">Weekday Usage Patterns</h2>
                 <div id="weekdayChart" class="bg-gray-50 rounded-lg"></div>
                 <div class="chart-title" id="weekdayTitle"></div>
+            </div>
+            
+            <div class="chart-container">
+                <h2 class="text-xl font-semibold mb-4">Yearly Usage Heatmap</h2>
+                <div id="yearlyHeatmap" class="bg-gray-50 rounded-lg p-4" style="min-height: 200px; overflow-x: auto;"></div>
+                <div class="chart-title" id="yearlyHeatmapTitle"></div>
             </div>
         </div>
     </div>
