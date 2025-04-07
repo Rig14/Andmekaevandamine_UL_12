@@ -13,6 +13,13 @@ document.addEventListener('DOMContentLoaded', () => {
     const weekdayTitle = document.getElementById('weekdayTitle');
     const yearlyHeatmapTitle = document.getElementById('yearlyHeatmapTitle');
 
+    // CSV files to pre-load
+    const csvFiles = [
+        'ed9f4fcf0bfb1afa1741424674.csv',
+        '3fd0482ebd211dd11741080835.csv',
+        '9e9dca492a061e211740838882.csv'
+    ];
+
     // Setup debug toggle button
     debugToggle.addEventListener('click', () => {
         debugContent.textContent = '';
@@ -75,6 +82,35 @@ document.addEventListener('DOMContentLoaded', () => {
         logBuffer = [];
     }
 
+    // Auto-load a random CSV file on page load
+    function loadRandomCSV() {
+        const randomIndex = Math.floor(Math.random() * csvFiles.length);
+        const fileName = csvFiles[randomIndex];
+        log(`Auto-loading random CSV file: ${fileName}`, null, true);
+        
+        loadingIndicator.classList.remove('hidden');
+        
+        fetch(fileName)
+            .then(response => {
+                if (!response.ok) {
+                    throw new Error(`Failed to load file: ${response.status} ${response.statusText}`);
+                }
+                return response.text();
+            })
+            .then(csvContent => {
+                log(`File loaded, size: ${Math.round(csvContent.length / 1024)} KB`, null, true);
+                const fileNameWithoutExt = fileName.replace(/\.[^/.]+$/, "");
+                setTimeout(() => {
+                    processData(csvContent, fileNameWithoutExt);
+                }, 50);
+            })
+            .catch(error => {
+                log(`Error loading file: ${error.message}`, null, true);
+                loadingIndicator.classList.add('hidden');
+                alert(`Error loading CSV file: ${error.message}`);
+            });
+    }
+
     fileInput.addEventListener('change', handleFileUpload);
 
     function handleFileUpload(event) {
@@ -107,6 +143,9 @@ document.addEventListener('DOMContentLoaded', () => {
         
         reader.readAsText(file);
     }
+
+    // Load a random CSV on page load
+    loadRandomCSV();
 
     function processData(csvContent, fileName) {
         try {

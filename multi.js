@@ -13,6 +13,13 @@ document.addEventListener('DOMContentLoaded', () => {
     const debugContent = document.getElementById('debugContent');
     const debugToggle = document.getElementById('debugToggle');
 
+    // CSV files to pre-load
+    const csvFiles = [
+        'ed9f4fcf0bfb1afa1741424674.csv',
+        '3fd0482ebd211dd11741080835.csv',
+        '9e9dca492a061e211740838882.csv'
+    ];
+
     // Setup debug toggle button
     debugToggle.addEventListener('click', () => {
         debugContent.textContent = '';
@@ -97,6 +104,54 @@ document.addEventListener('DOMContentLoaded', () => {
 
     fileInput.addEventListener('change', handleFileUpload);
     updateButton.addEventListener('click', updateChart);
+    
+    // Auto-load all CSV files when the page loads
+    loadAllCSVFiles();
+
+    // Function to automatically load all CSV files on page load
+    function loadAllCSVFiles() {
+        log("Auto-loading all CSV files...", null, true);
+        loadingIndicator.classList.remove('hidden');
+        
+        // Load files sequentially to avoid overwhelming the browser
+        loadNextFile(0);
+    }
+    
+    function loadNextFile(index) {
+        if (index >= csvFiles.length) {
+            loadingIndicator.classList.add('hidden');
+            log("All files loaded successfully!", null, true);
+            return;
+        }
+        
+        const fileName = csvFiles[index];
+        log(`Auto-loading CSV file (${index + 1}/${csvFiles.length}): ${fileName}`, null, true);
+        
+        fetch(fileName)
+            .then(response => {
+                if (!response.ok) {
+                    throw new Error(`Failed to load file: ${response.status} ${response.statusText}`);
+                }
+                return response.text();
+            })
+            .then(csvContent => {
+                log(`File loaded, size: ${Math.round(csvContent.length / 1024)} KB`, null, true);
+                const fileNameWithoutExt = fileName.replace(/\.[^/.]+$/, "");
+                processData(csvContent, fileNameWithoutExt);
+                
+                // Load the next file after a short delay
+                setTimeout(() => {
+                    loadNextFile(index + 1);
+                }, 500);
+            })
+            .catch(error => {
+                log(`Error loading file: ${error.message}`, null, true);
+                // Continue with next file even if this one failed
+                setTimeout(() => {
+                    loadNextFile(index + 1);
+                }, 500);
+            });
+    }
 
     function handleFileUpload(event) {
         const file = event.target.files[0];
