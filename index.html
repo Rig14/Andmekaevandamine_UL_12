@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Electricity Usage Analysis</title>
+    <script src="https://d3js.org/d3.v7.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
+    <style>
+        .chart-container {
+            margin-bottom: 2rem;
+        }
+        
+        /* Explicit height for chart containers */
+        #last100DaysChart, #hourlyAverageChart, #dayNightChart, #weekdayChart {
+            height: 300px;
+            min-height: 300px;
+            width: 100%;
+        }
+        
+        /* Fix for hidden class */
+        .hidden {
+            display: none !important;
+        }
+        
+        /* Ensure containers have padding */
+        .bg-gray-50 {
+            padding: 1rem;
+        }
+    </style>
+</head>
+<body class="bg-gray-100 p-6">
+    <div class="max-w-7xl mx-auto bg-white p-8 rounded-lg shadow-md">
+        <h1 class="text-3xl font-bold mb-6 text-center">Electricity Usage Analysis</h1>
+        
+        <div class="mb-6">
+            <label for="csvFile" class="block text-sm font-medium text-gray-700 mb-2">Upload Electricity Usage CSV</label>
+            <input type="file" id="csvFile" accept=".csv" class="block w-full text-sm text-gray-500
+                file:mr-4 file:py-2 file:px-4
+                file:rounded-md file:border-0
+                file:text-sm file:font-semibold
+                file:bg-blue-50 file:text-blue-700
+                hover:file:bg-blue-100
+                border border-gray-300 rounded-md">
+            <p class="mt-2 text-sm text-gray-500">Upload your electricity usage CSV file to analyze the data.</p>
+        </div>
+
+        <div id="loading" class="hidden text-center py-10">
+            <div class="inline-block animate-spin rounded-full h-8 w-8 border-4 border-blue-500 border-t-transparent"></div>
+            <p class="mt-2 text-gray-600">Processing data...</p>
+        </div>
+        
+        <div id="debug" class="p-4 mb-4 border border-gray-300 bg-gray-50 rounded-md hidden">
+            <h3 class="font-bold mb-2">Debug Information:</h3>
+            <pre id="debugContent" class="whitespace-pre-wrap text-xs"></pre>
+        </div>
+
+        <div id="visualizations" class="hidden">
+            <div class="chart-container">
+                <h2 class="text-xl font-semibold mb-4">Last 100 Days Usage</h2>
+                <div id="last100DaysChart" class="bg-gray-50 rounded-lg"></div>
+            </div>
+            
+            <div class="chart-container">
+                <h2 class="text-xl font-semibold mb-4">Average Usage Per Hour</h2>
+                <div id="hourlyAverageChart" class="bg-gray-50 rounded-lg"></div>
+            </div>
+            
+            <div class="chart-container">
+                <h2 class="text-xl font-semibold mb-4">Day vs Night Usage</h2>
+                <div id="dayNightChart" class="bg-gray-50 rounded-lg"></div>
+            </div>
+            
+            <div class="chart-container">
+                <h2 class="text-xl font-semibold mb-4">Weekday Usage Patterns</h2>
+                <div id="weekdayChart" class="bg-gray-50 rounded-lg"></div>
+            </div>
+        </div>
+    </div>
+
+    <script src="script.js"></script>
+</body>
+</html> 
