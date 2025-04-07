@@ -1,0 +1,158 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Multi-Dataset Electricity Comparison</title>
+    <script src="https://d3js.org/d3.v7.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
+    <style>
+        .chart-container {
+            margin-bottom: 2rem;
+        }
+        
+        /* Explicit height for chart containers */
+        #comparisonChart {
+            height: 400px;
+            min-height: 400px;
+            width: 100%;
+        }
+        
+        /* Fix for hidden class */
+        .hidden {
+            display: none !important;
+        }
+        
+        /* Ensure containers have padding */
+        .bg-gray-50 {
+            padding: 1rem;
+        }
+        
+        /* Debug panel styling */
+        #debug {
+            max-height: 200px;
+            overflow-y: auto;
+            position: relative;
+        }
+        
+        #debugContent {
+            font-family: monospace;
+            white-space: pre-wrap;
+            word-break: break-all;
+        }
+        
+        #debugToggle {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            z-index: 10;
+        }
+        
+        /* Chart title styling */
+        .chart-title {
+            text-align: center;
+            font-weight: 600;
+            margin-top: 5px;
+        }
+        
+        /* Dataset list styling */
+        .dataset-item {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 0.75rem 1rem;
+            margin-bottom: 0.5rem;
+            border-radius: 0.375rem;
+        }
+        
+        .color-indicator {
+            width: 1rem;
+            height: 1rem;
+            border-radius: 9999px;
+            margin-right: 0.5rem;
+        }
+        
+        .date-picker {
+            margin-top: 1rem;
+            padding: 1rem;
+            background-color: #f9fafb;
+            border-radius: 0.375rem;
+        }
+    </style>
+</head>
+<body class="bg-gray-100 p-6">
+    <div class="max-w-7xl mx-auto bg-white p-8 rounded-lg shadow-md">
+        <h1 class="text-3xl font-bold mb-6 text-center">Multi-Dataset Electricity Comparison</h1>
+        
+        <div class="flex justify-between items-center mb-6">
+            <div class="flex-1">
+                <label for="csvFile" class="block text-sm font-medium text-gray-700 mb-2">Upload Electricity Usage CSV</label>
+                <input type="file" id="csvFile" accept=".csv" class="block w-full text-sm text-gray-500
+                    file:mr-4 file:py-2 file:px-4
+                    file:rounded-md file:border-0
+                    file:text-sm file:font-semibold
+                    file:bg-blue-50 file:text-blue-700
+                    hover:file:bg-blue-100
+                    border border-gray-300 rounded-md">
+                <p class="mt-2 text-sm text-gray-500">Upload multiple electricity usage CSV files to compare them.</p>
+            </div>
+            <div class="ml-4">
+                <a href="index.html" class="inline-flex items-center px-4 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="mr-2 h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18" />
+                    </svg>
+                    <span>Single Dataset Analysis</span>
+                </a>
+            </div>
+        </div>
+
+        <div id="loading" class="hidden text-center py-10">
+            <div class="inline-block animate-spin rounded-full h-8 w-8 border-4 border-blue-500 border-t-transparent"></div>
+            <p class="mt-2 text-gray-600">Processing data...</p>
+        </div>
+        
+        <div id="debug" class="p-4 mb-4 border border-gray-300 bg-gray-50 rounded-md hidden">
+            <button id="debugToggle" class="px-2 py-1 bg-gray-200 hover:bg-gray-300 rounded text-xs">Clear Log</button>
+            <h3 class="font-bold mb-2">Debug Information:</h3>
+            <pre id="debugContent" class="text-xs"></pre>
+        </div>
+
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
+            <!-- Left column: Uploaded datasets -->
+            <div class="md:col-span-1 bg-gray-50 p-4 rounded-lg">
+                <h2 class="text-xl font-semibold mb-4">Uploaded Datasets</h2>
+                <div id="noDatasets" class="text-gray-500 text-center py-4">
+                    No datasets uploaded yet. Add datasets to compare them.
+                </div>
+                <div id="datasetList" class="mb-4"></div>
+                
+                <div class="date-picker hidden" id="datePicker">
+                    <h3 class="font-medium mb-2">Select Date to Compare</h3>
+                    <div id="dateOptions" class="mb-2"></div>
+                    <button id="updateButton" class="w-full px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500">
+                        Update Comparison
+                    </button>
+                </div>
+            </div>
+            
+            <!-- Right column: Comparison chart -->
+            <div class="md:col-span-2">
+                <div class="chart-container">
+                    <h2 class="text-xl font-semibold mb-4">24-Hour Comparison</h2>
+                    <div id="noChartMessage" class="bg-gray-50 rounded-lg p-8 text-center text-gray-600">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="mx-auto h-12 w-12 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                        </svg>
+                        <p class="mt-2">Upload at least one dataset to view the comparison chart.</p>
+                        <p class="mt-1 text-sm">The chart will show electricity usage for a 24-hour period.</p>
+                    </div>
+                    <div id="comparisonChart" class="bg-gray-50 rounded-lg hidden"></div>
+                    <div class="chart-title" id="comparisonTitle"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="multi.js"></script>
+</body>
+</html> 

@@ -4,17 +4,74 @@ document.addEventListener('DOMContentLoaded', () => {
     const visualizationsContainer = document.getElementById('visualizations');
     const debugContainer = document.getElementById('debug');
     const debugContent = document.getElementById('debugContent');
+    const debugToggle = document.getElementById('debugToggle');
+    
+    // Get chart title elements
+    const last100DaysTitle = document.getElementById('last100DaysTitle');
+    const hourlyAverageTitle = document.getElementById('hourlyAverageTitle');
+    const dayNightTitle = document.getElementById('dayNightTitle');
+    const weekdayTitle = document.getElementById('weekdayTitle');
 
-    // Add debugging function
-    function log(message, data = null) {
-        debugContainer.classList.remove('hidden');
-        const timestamp = new Date().toISOString().slice(11, 19);
-        const formattedMessage = data 
-            ? `[${timestamp}] ${message}: ${JSON.stringify(data, null, 2)}`
-            : `[${timestamp}] ${message}`;
+    // Setup debug toggle button
+    debugToggle.addEventListener('click', () => {
+        debugContent.textContent = '';
+    });
+
+    // Reduced logging for better performance
+    let logBuffer = [];
+    let isLoggingPaused = false;
+
+    function log(message, data = null, forceUpdate = false) {
+        // Don't show debug panel for every log
+        if (!debugContainer.classList.contains('hidden') || forceUpdate) {
+            const timestamp = new Date().toISOString().slice(11, 19);
+            let formattedMessage;
+            
+            if (data) {
+                // For objects, only stringify if it's important data (to reduce overhead)
+                if (forceUpdate) {
+                    try {
+                        formattedMessage = `[${timestamp}] ${message}: ${JSON.stringify(data, null, 2)}`;
+                    } catch (e) {
+                        formattedMessage = `[${timestamp}] ${message}: [Object too large to display]`;
+                    }
+                } else {
+                    formattedMessage = `[${timestamp}] ${message}: [Object data]`;
+                }
+            } else {
+                formattedMessage = `[${timestamp}] ${message}`;
+            }
+            
+            logBuffer.push(formattedMessage);
+            
+            // Only update the DOM if we're not in the middle of processing
+            // or if forceUpdate is true
+            if (!isLoggingPaused || forceUpdate) {
+                updateDebugPanel();
+            }
+        }
         
-        debugContent.textContent = formattedMessage + '\n' + debugContent.textContent;
+        // Always log to console
         console.log(message, data);
+    }
+    
+    // Update the debug panel in batches
+    function updateDebugPanel() {
+        if (logBuffer.length === 0) return;
+        
+        // Only show debug panel if we have logs
+        debugContainer.classList.remove('hidden');
+        
+        // Limit the number of lines to avoid performance issues
+        if (logBuffer.length > 100) {
+            logBuffer = ['[Log truncated due to size...]'].concat(logBuffer.slice(-99));
+        }
+        
+        // Update content
+        debugContent.textContent = logBuffer.join('\n') + '\n' + debugContent.textContent;
+        
+        // Clear buffer
+        logBuffer = [];
     }
 
     fileInput.addEventListener('change', handleFileUpload);
@@ -23,36 +80,49 @@ document.addEventListener('DOMContentLoaded', () => {
         const file = event.target.files[0];
         if (!file) return;
 
-        log(`File selected: ${file.name}`);
+        // Store the file name to use in chart titles
+        const fileName = file.name.replace(/\.[^/.]+$/, ""); // Remove file extension
+        
+        log(`File selected: ${file.name}`, null, true);
         loadingIndicator.classList.remove('hidden');
         visualizationsContainer.classList.add('hidden');
+        debugContent.textContent = ''; // Clear previous logs
 
         const reader = new FileReader();
         reader.onload = (e) => {
-            log(`File loaded, size: ${e.target.result.length} bytes`);
+            log(`File loaded, size: ${Math.round(e.target.result.length / 1024)} KB`, null, true);
             const csvContent = e.target.result;
-            processData(csvContent);
+            
+            // Use setTimeout to allow the UI to update
+            setTimeout(() => {
+                processData(csvContent, fileName);
+            }, 50);
         };
         
         reader.onerror = (e) => {
-            log(`Error reading file: ${e.target.error}`);
+            log(`Error reading file: ${e.target.error}`, null, true);
             loadingIndicator.classList.add('hidden');
         };
         
         reader.readAsText(file);
     }
 
-    function processData(csvContent) {
+    function processData(csvContent, fileName) {
         try {
+            isLoggingPaused = true;
+            
             // Split by lines and remove carriage returns
             const lines = csvContent.replaceAll('\r', '').split('\n');
-            log(`CSV lines: ${lines.length}`);
+            log(`CSV lines: ${lines.length}`, null, true);
             
             // Skip the first 4 lines and the header line
             const dataLines = lines.slice(5);
-            log(`Data lines after skipping header: ${dataLines.length}`);
+            log(`Data lines after skipping header: ${dataLines.length}`, null, true);
             
-            // Parse data
+            // Parse data - limit logging during this process
+            let validDataPoints = 0;
+            let invalidDateCount = 0;
+            
             const data = dataLines.map(line => {
                 if (!line.trim()) return null;
                 
@@ -68,42 +138,95 @@ document.addEventListener('DOMContentLoaded', () => {
                 
                 // Parse date correctly handling European format (DD.MM.YYYY HH:MM)
                 const parsedDate = parseEuropeanDate(dateStr);
-                if (!parsedDate || isNaN(parsedDate.getTime())) return null;
+                if (!parsedDate || isNaN(parsedDate.getTime())) {
+                    invalidDateCount++;
+                    return null;
+                }
                 
+                validDataPoints++;
                 return {
                     date: parsedDate,
                     usage: usage
                 };
             }).filter(item => item !== null);
 
-            log(`Valid data points parsed: ${data.length}`);
+            log(`Valid data points parsed: ${validDataPoints}, Invalid dates: ${invalidDateCount}`, null, true);
 
             if (data.length === 0) {
-                log("No valid data points found");
+                log("No valid data points found", null, true);
                 alert("No valid data found in the CSV file.");
                 loadingIndicator.classList.add('hidden');
+                isLoggingPaused = false;
+                updateDebugPanel();
                 return;
             }
 
             // Sort data by date
             data.sort((a, b) => a.date - b.date);
             
-            // Create visualizations
-            log("Creating visualizations");
-            createLast100DaysChart(data);
-            createHourlyAverageChart(data);
-            createDayNightChart(data);
-            createWeekdayChart(data);
+            // Get the last 100 days of data
+            const last100Days = getLast100DaysData(data);
+            const dateRange = {
+                start: last100Days[0].date.toLocaleDateString(),
+                end: last100Days[last100Days.length-1].date.toLocaleDateString()
+            };
+            log(`Date range: ${dateRange.start} to ${dateRange.end}`, null, true);
             
-            loadingIndicator.classList.add('hidden');
-            visualizationsContainer.classList.remove('hidden');
-            log("Visualizations should be displayed now");
+            // Create visualizations using the same 100-day dataset
+            log("Creating visualizations...", null, true);
+            
+            // Set chart titles with file name and date range
+            last100DaysTitle.textContent = `Dataset: ${fileName} | Period: ${dateRange.start} - ${dateRange.end}`;
+            hourlyAverageTitle.textContent = `Dataset: ${fileName} | Average hourly usage over 100 days`;
+            dayNightTitle.textContent = `Dataset: ${fileName} | Day vs Night comparison over 100 days`;
+            weekdayTitle.textContent = `Dataset: ${fileName} | Weekday patterns over 100 days`;
+            
+            // Use setTimeout to avoid UI freezing
+            setTimeout(() => {
+                createLast100DaysChart(last100Days);
+                
+                setTimeout(() => {
+                    createHourlyAverageChart(last100Days);
+                    
+                    setTimeout(() => {
+                        createDayNightChart(last100Days);
+                        
+                        setTimeout(() => {
+                            createWeekdayChart(last100Days);
+                            
+                            loadingIndicator.classList.add('hidden');
+                            visualizationsContainer.classList.remove('hidden');
+                            log("Visualizations complete", null, true);
+                            
+                            isLoggingPaused = false;
+                            updateDebugPanel();
+                        }, 0);
+                    }, 0);
+                }, 0);
+            }, 0);
             
         } catch (error) {
-            log(`Error processing data: ${error.message}`, error.stack);
+            log(`Error processing data: ${error.message}`, error.stack, true);
             loadingIndicator.classList.add('hidden');
             alert("Error processing the data: " + error.message);
+            isLoggingPaused = false;
+            updateDebugPanel();
         }
+    }
+
+    // Function to get the last 100 days of data
+    function getLast100DaysData(data) {
+        if (data.length === 0) return [];
+        
+        // Get the most recent date in the dataset
+        const lastDate = new Date(Math.max(...data.map(d => d.date.getTime())));
+        
+        // Calculate the date 100 days before the most recent date
+        const startDate = new Date(lastDate);
+        startDate.setDate(lastDate.getDate() - 100);
+        
+        // Filter data to only include the last 100 days
+        return data.filter(d => d.date >= startDate);
     }
 
     // Function to parse European date format (DD.MM.YYYY HH:MM)
@@ -128,23 +251,17 @@ document.addEventListener('DOMContentLoaded', () => {
             
             return new Date(year, month, day, hour, minute);
         } catch (error) {
-            log(`Error parsing date "${dateStr}": ${error.message}`);
             return null;
         }
     }
 
     function createLast100DaysChart(data) {
         try {
-            // Get the last 100 days of data or all if less than 100
-            const last100Days = data.slice(-Math.min(100, data.length));
-            log(`Creating last 100 days chart with ${last100Days.length} data points`);
-            
             const container = document.getElementById('last100DaysChart');
             container.innerHTML = '';
             
             const width = container.clientWidth || 800;
             const height = container.clientHeight || 300;
-            log(`Chart dimensions: ${width}x${height}`);
             
             const margin = { top: 20, right: 30, bottom: 50, left: 50 };
             
@@ -162,11 +279,11 @@ document.addEventListener('DOMContentLoaded', () => {
             
             // Create scales
             const xScale = d3.scaleTime()
-                .domain(d3.extent(last100Days, d => d.date))
+                .domain(d3.extent(data, d => d.date))
                 .range([0, chartWidth]);
                 
             const yScale = d3.scaleLinear()
-                .domain([0, d3.max(last100Days, d => d.usage) * 1.1 || 0.1])
+                .domain([0, d3.max(data, d => d.usage) * 1.1 || 0.1])
                 .range([chartHeight, 0]);
                 
             // Create axes
@@ -196,7 +313,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 .curve(d3.curveMonotoneX);
                 
             chart.append('path')
-                .datum(last100Days)
+                .datum(data)
                 .attr('fill', 'none')
                 .attr('stroke', '#3b82f6')
                 .attr('stroke-width', 2)
@@ -204,7 +321,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 
             // Add tooltips using dots
             chart.selectAll('.dot')
-                .data(last100Days)
+                .data(data)
                 .enter()
                 .append('circle')
                 .attr('class', 'dot')
@@ -220,7 +337,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 
             log("Last 100 days chart created");
         } catch (error) {
-            log(`Error creating last 100 days chart: ${error.message}`, error.stack);
+            log(`Error creating last 100 days chart: ${error.message}`, null, true);
         }
     }
 
@@ -249,8 +366,6 @@ document.addEventListener('DOMContentLoaded', () => {
                     item.average = item.average / item.count;
                 }
             });
-            
-            log(`Hourly data calculated, example: Hour 0 avg: ${hourlyData[0].average.toFixed(4)}`);
             
             const container = document.getElementById('hourlyAverageChart');
             container.innerHTML = '';
@@ -329,7 +444,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 
             log("Hourly average chart created");
         } catch (error) {
-            log(`Error creating hourly average chart: ${error.message}`, error.stack);
+            log(`Error creating hourly average chart: ${error.message}`, null, true);
         }
     }
 
@@ -363,8 +478,6 @@ document.addEventListener('DOMContentLoaded', () => {
                     item.average = 0;
                 }
             });
-            
-            log(`Day/Night data: Day avg: ${dayNightData[0].average.toFixed(4)}, Night avg: ${dayNightData[1].average.toFixed(4)}`);
             
             const container = document.getElementById('dayNightChart');
             container.innerHTML = '';
@@ -426,7 +539,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 
             log("Day/night chart created");
         } catch (error) {
-            log(`Error creating day/night chart: ${error.message}`, error.stack);
+            log(`Error creating day/night chart: ${error.message}`, null, true);
         }
     }
 
@@ -450,8 +563,6 @@ document.addEventListener('DOMContentLoaded', () => {
                     item.average = item.usage / item.count;
                 }
             });
-            
-            log(`Weekday data calculated, example: Monday avg: ${weekdayData[1].average.toFixed(4)}`);
             
             const container = document.getElementById('weekdayChart');
             container.innerHTML = '';
@@ -518,7 +629,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 
             log("Weekday chart created");
         } catch (error) {
-            log(`Error creating weekday chart: ${error.message}`, error.stack);
+            log(`Error creating weekday chart: ${error.message}`, null, true);
         }
     }
 }); 
